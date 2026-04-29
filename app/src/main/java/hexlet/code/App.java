@@ -6,7 +6,7 @@ import io.javalin.rendering.template.JavalinJte;
 import java.io.IOException;
 
 public class App {
-    public static Javalin getApp() throws IOException{
+    public static Javalin getApp() {
          Javalin app = Javalin.create(config -> {
              config.bundledPlugins.enableDevLogging();
              config.fileRenderer(new JavalinJte());
