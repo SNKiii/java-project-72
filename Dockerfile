@@ -1,9 +1,9 @@
 FROM gradle:8.7-jdk21 AS build
 COPY --chown=gradle:gradle . /home/gradle/src
 WORKDIR /home/gradle/src
-RUN gradle :app:installDist --no-daemon -Dorg.gradle.jvmargs="-Xmx384m"
+RUN gradle :app:shadowJar --no-daemon
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-COPY --from=build /home/gradle/src/app/build/install/app /app
+COPY --from=build /home/gradle/src/app/build/libs/*.jar app.jar
 EXPOSE 7070
-CMD ["./bin/app"]
+CMD ["java", "-jar", "app.jar"]
