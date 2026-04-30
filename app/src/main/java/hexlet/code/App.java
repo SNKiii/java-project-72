@@ -14,7 +14,7 @@ public class App {
 
         app.get("/", ctx -> {
             ctx.contentType("text/html");
-            ctx.result("<h1>Hello Hexlet</h1>");
+            ctx.result("<h1>Hello World</h1>");
         });
 
         return app;
