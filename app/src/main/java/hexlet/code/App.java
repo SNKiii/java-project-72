@@ -7,6 +7,9 @@ import java.io.IOException;
 
 public class App {
     public static Javalin getApp() {
+
+        var hikariConfig = ConfigDB.getJDBCUrl();
+
          Javalin app = Javalin.create(config -> {
              config.bundledPlugins.enableDevLogging();
              config.fileRenderer(new JavalinJte());
@@ -22,6 +25,7 @@ public class App {
 
    public static void main(String[] args) throws IOException {
         Javalin app = getApp();
-        app.start(7070);
+       int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "7070"));
+       app.start(port);
     }
 }
