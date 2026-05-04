@@ -19,7 +19,8 @@ public class App {
 
     public static Javalin getApp() {
 
-        var hikariConfig = ConfigDB.getJDBCUrl();
+        var hikariDataSource = ConfigDB.getJDBCUrl();
+        var baseConfig = new BaseRepository(hikariDataSource);
 
          Javalin app = Javalin.create(config -> {
              config.bundledPlugins.enableDevLogging();
