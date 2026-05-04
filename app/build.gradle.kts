@@ -46,5 +46,10 @@ tasks.register("stage") {
 }
 
 jte {
-    generate()
+    jte {
+        sourceDirectory.set(project.file("src/main/resources/templates").toPath())
+        contentType.set(gg.jte.ContentType.Html)
+        generate()
+    }
+
 }
