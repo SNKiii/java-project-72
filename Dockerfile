@@ -1,10 +1,10 @@
 FROM gradle:8.7-jdk21 AS build
 COPY --chown=gradle:gradle . /home/gradle/src
-WORKDIR /home/gradle/src/app
+WORKDIR /home/gradle/src
 RUN gradle shadowJar --no-daemon
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-COPY --from=build /home/gradle/src/app/build/libs/*.jar app.jar
+COPY --from=build /home/gradle/src/build/libs/*.jar app.jar
 EXPOSE 7070
 CMD ["java", "-jar", "app.jar"]
