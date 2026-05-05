@@ -5,6 +5,6 @@ RUN gradle shadowJar --no-daemon
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-COPY --from=build /home/gradle/src/build/libs/*.jar app.jar
+COPY --from=build /home/gradle/src/build/libs/*.jar /app/app.jar
 EXPOSE 7070
 CMD ["java", "-jar", "app.jar"]

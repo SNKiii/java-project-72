@@ -52,5 +52,11 @@ jte {
         contentType.set(gg.jte.ContentType.Html)
         generate()
     }
-
+}
+tasks.shadowJar {
+    mergeServiceFiles()
+    archiveClassifier.set("")
+    manifest {
+        attributes["Main-Class"] = "hexlet.code.App"
+    }
 }
