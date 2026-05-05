@@ -14,13 +14,13 @@
         </tr>
         </thead>
         <tbody>
-        @for(url : page.getUrls())
+        @for(var url : page.getUrls())
             <tr>
                 <td>${url.getId()}</td>
                 <td>
                     <a href="/urls/${url.getId()}">${url.getName()}</a>
                 </td>
-                <td>${url.getCreatedAt()}</td>
+                <td>${url.getCreatedAt() != null ? url.getCreatedAt().toString() : "-"}</td>
                 <td>
                     @if(page.getLastCheckCode().containsKey(url.getId()))
                         ${page.getLastCheckCode().get(url.getId())}

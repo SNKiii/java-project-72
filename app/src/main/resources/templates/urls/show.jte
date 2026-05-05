@@ -18,7 +18,7 @@
             </tr>
             <tr>
                 <th scope="row">Дата создания</th>
-                <td>${page.getUrl().getCreatedAt()}</td>
+                <td>${page.getUrl().getCreatedAt() != null ? page.getUrl().getCreatedAt().toString() : "-"}</td>
             </tr>
             </tbody>
         </table>
@@ -41,14 +41,14 @@
         </tr>
         </thead>
         <tbody>
-        @for(check : page.getChecks())
+        @for(var check : page.getChecks())
             <tr>
                 <td>${check.getId()}</td>
                 <td>${check.getStatusCode()}</td>
                 <td>${check.getTitle() != null ? check.getTitle() : "-"}</td>
                 <td>${check.getH1() != null ? check.getH1() : "-"}</td>
                 <td>${check.getDescription() != null ? check.getDescription() : "-"}</td>
-                <td>${check.getCreatedAt()}</td>
+                <td>${check.getCreatedAt() != null ? check.getCreatedAt().toString() : "-"}</td>
             </tr>
         @endfor
         </tbody>
