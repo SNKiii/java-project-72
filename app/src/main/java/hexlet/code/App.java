@@ -7,7 +7,6 @@ import io.javalin.Javalin;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.rendering.template.JavalinJte;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +32,12 @@ public class App {
         Javalin app = Javalin.create(config -> {
             config.bundledPlugins.enableDevLogging();
             config.fileRenderer(new JavalinJte(createTemplateEngine()));
+        });
+
+        app.exception(Exception.class, (e, ctx) -> {
+            System.err.println("=== ERROR ===");
+            e.printStackTrace(System.err);
+            ctx.status(500).result("Error: " + e.getMessage());
         });
 
         app.get("/", ctx -> {
