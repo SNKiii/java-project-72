@@ -1,5 +1,7 @@
 @import gg.jte.Content
+@import hexlet.code.BasePage
 @param Content content
+@param BasePage page = null
 
 <!DOCTYPE html>
 <html lang="ru">
@@ -18,6 +20,11 @@
 
 <main class="flex-grow-1">
     <div class="container-lg mt-3">
+        @if(page != null && page.getFlash() != null)
+            <div class="alert alert-${page.getFlashType()}" role="alert">
+                ${page.getFlash()}
+            </div>
+        @endif
         ${content}
     </div>
 </main>

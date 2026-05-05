@@ -12,7 +12,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class Url {
     private Long id;
-    private  String name;
+    private String name;
     private LocalDateTime createdAt;
+
+    public Url(String name) {
+        this.name = name;
+    }
 }
 
