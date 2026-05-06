@@ -53,11 +53,9 @@ tasks.register("stage") {
 }
 
 jte {
-    jte {
-        sourceDirectory.set(project.file("src/main/resources/templates").toPath())
-        contentType.set(gg.jte.ContentType.Html)
-        generate()
-    }
+    generate()
+    sourceDirectory.set(project.file("src/main/resources/templates").toPath())
+    contentType.set(gg.jte.ContentType.Html)
 }
 tasks.shadowJar {
     mergeServiceFiles()
