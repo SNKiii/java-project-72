@@ -1,4 +1,4 @@
-name: Java CI with Tests and Coverage
+name:  Tests
 
 on:
   push:
