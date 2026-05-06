@@ -5,6 +5,7 @@ plugins {
     id("application")
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("gg.jte.gradle") version "3.1.12"
+    id("jacoco")
 }
 
 application {
@@ -32,6 +33,11 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     implementation("org.postgresql:postgresql:42.7.3")
     implementation("org.jsoup:jsoup:1.17.2")
+    testImplementation(platform("org.junit:junit-bom:5.9.1"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.assertj:assertj-core:3.24.2")
+    testImplementation("io.javalin:javalin-testtools:6.1.3")
+    testImplementation("com.h2database:h2:2.2.220")
 }
 
 tasks.test {
@@ -59,4 +65,24 @@ tasks.shadowJar {
     manifest {
         attributes["Main-Class"] = "hexlet.code.App"
     }
+}
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(true)
+    }
+}
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.50".toBigDecimal()
+            }
+        }
+    }
+}
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }

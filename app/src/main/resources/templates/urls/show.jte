@@ -24,19 +24,19 @@
         </table>
     </div>
 
-    <form action="/urls/${page.getUrl().getId()}/checks" method="post" class="mt-3">
-        <button type="submit" class="btn btn-primary">Запустить проверку</button>
+    <form method="post" action="/urls/${page.getUrl().getId()}/checks" class="mt-3">
+        <input type="submit" value="Запустить проверку" class="btn btn-primary">
     </form>
 
     <h2 class="mt-5">Проверки</h2>
-    <table class="table table-bordered table-hover mt-3">
+    <table class="table table-bordered table-hover mt-3" data-test="checks">
         <thead>
         <tr>
             <th>ID</th>
             <th>Код ответа</th>
-            <th>Title</th>
-            <th>H1</th>
-            <th>Description</th>
+            <th>h1</th>
+            <th>title</th>
+            <th>description</th>
             <th>Дата создания</th>
         </tr>
         </thead>
@@ -45,9 +45,9 @@
             <tr>
                 <td>${check.getId()}</td>
                 <td>${check.getStatusCode()}</td>
-                <td>${check.getTitle() != null ? check.getTitle() : "-"}</td>
-                <td>${check.getH1() != null ? check.getH1() : "-"}</td>
-                <td>${check.getDescription() != null ? check.getDescription() : "-"}</td>
+                <td>${check.getH1() != null ? check.getH1() : ""}</td>
+                <td>${check.getTitle() != null ? check.getTitle() : ""}</td>
+                <td>${check.getDescription() != null ? check.getDescription() : ""}</td>
                 <td>${check.getCreatedAt() != null ? check.getCreatedAt().toString() : "-"}</td>
             </tr>
         @endfor
