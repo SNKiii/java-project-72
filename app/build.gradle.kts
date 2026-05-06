@@ -38,6 +38,8 @@ dependencies {
     testImplementation("org.assertj:assertj-core:3.24.2")
     testImplementation("io.javalin:javalin-testtools:6.1.3")
     testImplementation("com.h2database:h2:2.2.220")
+    implementation("com.konghq:unirest-java:3.14.5")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
 
 tasks.test {

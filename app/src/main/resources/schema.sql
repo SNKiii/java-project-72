@@ -14,4 +14,4 @@ CREATE TABLE IF NOT EXISTS url_checks (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX ON url_checks(url_id);
+CREATE INDEX IF NOT EXISTS idx_url_checks_url_id ON url_checks(url_id);

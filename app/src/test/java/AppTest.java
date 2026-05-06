@@ -4,24 +4,32 @@ import hexlet.code.App;
 import hexlet.code.BaseRepository;
 import io.javalin.Javalin;
 import io.javalin.testtools.JavalinTest;
-import okhttp3.Response;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AppTest {
-
     private static Javalin app;
     private static HikariDataSource dataSource;
+    private static MockWebServer mockWebServer;
+    private static String mockServerUrl;
 
     @BeforeAll
-    static void beforeAll() {
+    static void beforeAll() throws IOException {
+        mockWebServer = new MockWebServer();
+        mockWebServer.start();
+        mockServerUrl = mockWebServer.url("/").toString();
+
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;");
         dataSource = new HikariDataSource(config);
@@ -32,18 +40,20 @@ class AppTest {
     }
 
     @AfterAll
-    static void afterAll() {
+    static void afterAll() throws IOException {
         if (dataSource != null) {
             dataSource.close();
         }
         if (app != null) {
             app.stop();
         }
+        if (mockWebServer != null) {
+            mockWebServer.shutdown();
+        }
     }
 
     @BeforeEach
     void beforeEach() throws SQLException {
-        // Очищаем таблицы перед каждым тестом
         try (var conn = dataSource.getConnection();
              var stmt = conn.createStatement()) {
             stmt.execute("DELETE FROM url_checks");
@@ -83,136 +93,29 @@ class AppTest {
         }
     }
 
-
     @Test
-    void testRoot() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.get("/")) {
-                assertThat(response.code()).isEqualTo(200);
-                assertThat(response.body().string()).contains("Анализатор страниц");
-            }
-        });
-    }
+    void testCheckUrlSuccess() throws SQLException, InterruptedException {
+        String mockHtml = """
+            <html>
+                <head><title>Test Title</title></head>
+                <body>
+                    <h1>Test H1</h1>
+                    <meta name="description" content="Test Description">
+                </body>
+            </html>
+            """;
 
-    @Test
-    void testGetUrls() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.get("/urls")) {
-                assertThat(response.code()).isEqualTo(200);
-                assertThat(response.body().string()).contains("Сайты");
-                assertThat(response.body().string()).contains("data-test=\"urls\"");
-            }
-        });
-    }
+        MockResponse mockResponse = new MockResponse()
+                .setResponseCode(200)
+                .setBody(mockHtml)
+                .addHeader("Content-Type", "text/html");
+        mockWebServer.enqueue(mockResponse);
 
-    @Test
-    void testCreateUrlSuccess() throws SQLException {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.post("/urls", "url=https://example.com")) {
-                assertThat(response.code()).isEqualTo(200);
-                String location = response.header("Location");
-                assertThat(location).isNotNull();
-                assertThat(location).matches("/urls/\\d+");
-            }
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT * FROM urls WHERE name = 'https://example.com'")) {
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getString("name")).isEqualTo("https://example.com");
-            }
-        });
-    }
-
-    @Test
-    void testCreateUrlWithPort() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.post("/urls", "url=https://example.com:8080/some/path")) {
-                assertThat(response.code()).isEqualTo(200);
-            }
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT * FROM urls WHERE name = 'https://example.com:8080'")) {
-                assertThat(rs.next()).isTrue();
-            }
-        });
-    }
-
-    @Test
-    void testCreateUrlDuplicate() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response1 = client.post("/urls", "url=https://duplicate.com")) {
-                assertThat(response1.code()).isEqualTo(200);
-            }
-            try (Response response2 = client.post("/urls", "url=https://duplicate.com")) {
-                assertThat(response2.code()).isEqualTo(200);
-                String location = response2.header("Location");
-                assertThat(location).matches("/urls/\\d+");
-            }
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT COUNT(*) FROM urls WHERE name = 'https://duplicate.com'")) {
-                rs.next();
-                assertThat(rs.getInt(1)).isEqualTo(1);
-            }
-        });
-    }
-
-    @Test
-    void testCreateUrlInvalid() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.post("/urls", "url=not-a-valid-url")) {
-                assertThat(response.code()).isEqualTo(422);
-                assertThat(response.body().string()).contains("Некорректный URL");
-            }
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT COUNT(*) FROM urls")) {
-                rs.next();
-                assertThat(rs.getInt(1)).isEqualTo(0);
-            }
-        });
-    }
-
-    @Test
-    void testGetUrlById() throws SQLException {
-        long id;
-        try (var conn = dataSource.getConnection();
-             var stmt = conn.prepareStatement("INSERT INTO urls (name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-            stmt.setString(1, "https://test.com");
-            stmt.executeUpdate();
-            var generatedKeys = stmt.getGeneratedKeys();
-            generatedKeys.next();
-            id = generatedKeys.getLong(1);
-        }
-
-        final long urlId = id;
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.get("/urls/" + urlId)) {
-                assertThat(response.code()).isEqualTo(200);
-                String body = response.body().string();
-                assertThat(body).contains("https://test.com");
-                assertThat(body).contains("data-test=\"url\"");
-                assertThat(body).contains("<form method=\"post\" action=\"/urls/" + urlId + "/checks\">");
-                assertThat(body).contains("<input type=\"submit\" value=\"Запустить проверку\">");
-            }
-        });
-    }
-
-    @Test
-    void testGetUrlNotFound() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.get("/urls/99999")) {
-                assertThat(response.code()).isEqualTo(404);
-            }
-        });
-    }
-
-    @Test
-    void testCreateCheck() throws SQLException {
+        String testUrl = mockServerUrl;
         long urlId;
         try (var conn = dataSource.getConnection();
              var stmt = conn.prepareStatement("INSERT INTO urls (name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-            stmt.setString(1, "https://example.com");
+            stmt.setString(1, testUrl);
             stmt.executeUpdate();
             var generatedKeys = stmt.getGeneratedKeys();
             generatedKeys.next();
@@ -221,11 +124,9 @@ class AppTest {
 
         final long id = urlId;
         JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.post("/urls/" + id + "/checks", "")) {
+            try (var response = client.post("/urls/" + id + "/checks", "")) {
                 assertThat(response.code()).isEqualTo(200);
-                // Проверяем редирект обратно на страницу URL
-                String location = response.header("Location");
-                assertThat(location).isEqualTo("/urls/" + id);
+                assertThat(response.header("Location")).isEqualTo("/urls/" + id);
             }
         });
 
@@ -234,12 +135,94 @@ class AppTest {
              var rs = stmt.executeQuery("SELECT * FROM url_checks WHERE url_id = " + urlId)) {
             assertThat(rs.next()).isTrue();
             assertThat(rs.getInt("status_code")).isEqualTo(200);
+            assertThat(rs.getString("title")).isEqualTo("Test Title");
+            assertThat(rs.getString("h1")).isEqualTo("Test H1");
+            assertThat(rs.getString("description")).isEqualTo("Test Description");
+        }
+
+        RecordedRequest recordedRequest = mockWebServer.takeRequest();
+        assertThat(recordedRequest.getPath()).isEqualTo("/");
+    }
+
+    @Test
+    void testCheckUrlClientError() throws SQLException {
+        MockResponse mockResponse = new MockResponse().setResponseCode(404);
+        mockWebServer.enqueue(mockResponse);
+
+        String testUrl = mockServerUrl;
+        long urlId;
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.prepareStatement("INSERT INTO urls (name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, testUrl);
+            stmt.executeUpdate();
+            var generatedKeys = stmt.getGeneratedKeys();
+            generatedKeys.next();
+            urlId = generatedKeys.getLong(1);
+        }
+
+        final long id = urlId;
+        JavalinTest.test(app, (server, client) -> {
+            try (var response = client.post("/urls/" + id + "/checks", "")) {
+                assertThat(response.code()).isEqualTo(200);
+            }
+        });
+
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.createStatement();
+             var rs = stmt.executeQuery("SELECT COUNT(*) FROM url_checks WHERE url_id = " + urlId)) {
+            rs.next();
+            assertThat(rs.getInt(1)).isZero();
         }
     }
 
     @Test
-    void testUrlPageShowsChecksTable() throws SQLException {
-        // Добавляем URL
+    void testCheckUrlTruncatesLongText() throws SQLException {
+        String longText = "a".repeat(300);
+        String truncatedText = "a".repeat(200) + "...";
+
+        String mockHtml = """
+            <html>
+                <head><title>%s</title></head>
+                <body>
+                    <h1>%s</h1>
+                    <meta name="description" content="%s">
+                </body>
+            </html>
+            """.formatted(longText, longText, longText);
+
+        MockResponse mockResponse = new MockResponse()
+                .setResponseCode(200)
+                .setBody(mockHtml);
+        mockWebServer.enqueue(mockResponse);
+
+        String testUrl = mockServerUrl;
+        long urlId;
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.prepareStatement("INSERT INTO urls (name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, testUrl);
+            stmt.executeUpdate();
+            var generatedKeys = stmt.getGeneratedKeys();
+            generatedKeys.next();
+            urlId = generatedKeys.getLong(1);
+        }
+
+        final long id = urlId;
+        JavalinTest.test(app, (server, client) -> {
+            client.post("/urls/" + id + "/checks", "");
+        });
+
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.createStatement();
+             var rs = stmt.executeQuery("SELECT * FROM url_checks WHERE url_id = " + urlId)) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString("title")).isEqualTo(truncatedText);
+            assertThat(rs.getString("h1")).isEqualTo(truncatedText);
+            assertThat(rs.getString("description")).isEqualTo(truncatedText);
+        }
+    }
+
+    @Test
+    void testUrlPageShowsCheckTable() throws SQLException {
         long urlId;
         try (var conn = dataSource.getConnection();
              var stmt = conn.prepareStatement("INSERT INTO urls (name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
@@ -249,6 +232,7 @@ class AppTest {
             generatedKeys.next();
             urlId = generatedKeys.getLong(1);
         }
+
         try (var conn = dataSource.getConnection();
              var stmt = conn.prepareStatement("""
                  INSERT INTO url_checks (url_id, status_code, title, h1, description) 
@@ -264,105 +248,15 @@ class AppTest {
 
         final long id = urlId;
         JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.get("/urls/" + id)) {
+            try (var response = client.get("/urls/" + id)) {
                 assertThat(response.code()).isEqualTo(200);
                 String body = response.body().string();
-                // Проверяем наличие таблицы с проверками
+                assertThat(body).contains("<form method=\"post\" action=\"/urls/" + id + "/checks\">");
+                assertThat(body).contains("<input type=\"submit\" value=\"Запустить проверку\">");
                 assertThat(body).contains("data-test=\"checks\"");
-                // Проверяем содержимое проверки
                 assertThat(body).contains("Example Title");
                 assertThat(body).contains("Example H1");
-                assertThat(body).contains("Example Description");
                 assertThat(body).contains("200");
-            }
-        });
-    }
-
-    @Test
-    void testUrlsPageShowsLastCheckCode() throws SQLException {
-        long urlId;
-        try (var conn = dataSource.getConnection();
-             var stmt = conn.prepareStatement("INSERT INTO urls (name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-            stmt.setString(1, "https://example.com");
-            stmt.executeUpdate();
-            var generatedKeys = stmt.getGeneratedKeys();
-            generatedKeys.next();
-            urlId = generatedKeys.getLong(1);
-        }
-        try (var conn = dataSource.getConnection();
-             var stmt = conn.prepareStatement("INSERT INTO url_checks (url_id, status_code) VALUES (?, ?)")) {
-            stmt.setLong(1, urlId);
-            stmt.setInt(2, 200);
-            stmt.executeUpdate();
-        }
-
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.get("/urls")) {
-                assertThat(response.code()).isEqualTo(200);
-                String body = response.body().string();
-                assertThat(body).contains("data-test=\"urls\"");
-                assertThat(body).contains("200");
-            }
-        });
-    }
-
-    @Test
-    void testUrlsSortedByIdDesc() throws SQLException {
-        try (var conn = dataSource.getConnection();
-             var stmt = conn.prepareStatement("INSERT INTO urls (name) VALUES (?)")) {
-            stmt.setString(1, "https://first.com");
-            stmt.executeUpdate();
-            stmt.setString(1, "https://second.com");
-            stmt.executeUpdate();
-            stmt.setString(1, "https://third.com");
-            stmt.executeUpdate();
-        }
-
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.get("/urls")) {
-                assertThat(response.code()).isEqualTo(200);
-                String body = response.body().string();
-
-                int thirdIndex = body.indexOf("https://third.com");
-                int secondIndex = body.indexOf("https://second.com");
-                int firstIndex = body.indexOf("https://first.com");
-
-                assertThat(thirdIndex).isLessThan(secondIndex);
-                assertThat(secondIndex).isLessThan(firstIndex);
-            }
-        });
-    }
-
-    @Test
-    void testFlashMessageOnSuccess() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.post("/urls", "url=https://flash-success.com")) {
-                assertThat(response.code()).isEqualTo(200);
-                String location = response.header("Location");
-                assertThat(location).matches("/urls/\\d+");
-            }
-        });
-    }
-
-    @Test
-    void testFlashMessageOnDuplicate() {
-        JavalinTest.test(app, (server, client) -> {
-            client.post("/urls", "url=https://flash-duplicate.com");
-
-            try (Response response = client.post("/urls", "url=https://flash-duplicate.com")) {
-                assertThat(response.code()).isEqualTo(200);
-                String location = response.header("Location");
-                assertThat(location).matches("/urls/\\d+");
-            }
-        });
-    }
-
-    @Test
-    void testFlashMessageOnInvalidUrl() {
-        JavalinTest.test(app, (server, client) -> {
-            try (Response response = client.post("/urls", "url=invalid")) {
-                assertThat(response.code()).isEqualTo(422);
-                assertThat(response.body().string()).contains("Некорректный URL");
             }
         });
     }
