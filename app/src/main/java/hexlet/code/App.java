@@ -6,6 +6,8 @@ import gg.jte.resolve.ResourceCodeResolver;
 import io.javalin.Javalin;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.rendering.template.JavalinJte;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -135,15 +137,10 @@ public class App {
             try {
                 var url = UrlRepository.findById(id)
                         .orElseThrow(() -> new NotFoundResponse("Url not found"));
-                var httpClient = java.net.http.HttpClient.newHttpClient();
-                var request = java.net.http.HttpRequest.newBuilder()
-                        .uri(java.net.URI.create(url.getName()))
-                        .timeout(java.time.Duration.ofSeconds(10))
-                        .GET()
-                        .build();
 
-                var response = httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                int statusCode = response.statusCode();
+                HttpResponse<String> response = Unirest.get(url.getName())
+                        .asString();
+                int statusCode = response.getStatus();
 
                 if (statusCode >= 400) {
                     ctx.sessionAttribute("flash", "Произошла ошибка при проверке");
@@ -152,7 +149,7 @@ public class App {
                     return;
                 }
 
-                String html = response.body();
+                String html = response.getBody();
                 org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(html);
 
                 String title = doc.title();

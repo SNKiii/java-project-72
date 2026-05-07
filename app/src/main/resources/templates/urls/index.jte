@@ -16,16 +16,26 @@
         </thead>
         <tbody>
         @for(var url : page.getUrls())
-            @var lastDate = page.getLastCheckDate().get(url.getId())
-            @var lastCode = page.getLastCheckCode().get(url.getId())
             <tr>
                 <td>${url.getId()}</td>
                 <td>
                     <a href="/urls/${url.getId()}">${url.getName()}</a>
                 </td>
                 <td>${url.getCreatedAt() != null ? url.getCreatedAt().toString() : "-"}</td>
-                <td>${lastDate != null ? lastDate.toString() : "-"}</td>
-                <td>${lastCode != null ? lastCode : "-"}</td>
+                <td>
+                    @if(page.getLastCheckDate().containsKey(url.getId()))
+                        ${page.getLastCheckDate().get(url.getId()).toString()}
+                    @else
+                        -
+                    @endif
+                </td>
+                <td>
+                    @if(page.getLastCheckCode().containsKey(url.getId()))
+                        ${page.getLastCheckCode().get(url.getId())}
+                    @else
+                        -
+                    @endif
+                </td>
             </tr>
         @endfor
         </tbody>
