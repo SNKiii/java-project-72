@@ -7,6 +7,7 @@ plugins {
     id("gg.jte.gradle") version "3.1.12"
     id("jacoco")
     id ("org.sonarqube") version "7.3.0.8198"
+    id("checkstyle")
 }
 
 sonar {
@@ -49,6 +50,10 @@ dependencies {
     implementation("com.konghq:unirest-java:3.14.5")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     implementation("com.konghq:unirest-java:3.14.5")
+}
+
+checkstyle {
+    toolVersion = "10.12.4"
 }
 
 tasks.test {
@@ -94,4 +99,11 @@ tasks.jacocoTestCoverageVerification {
 }
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
+}
+tasks.checkstyleMain {
+    exclude("**/build/generated-sources/**")
+}
+
+tasks.checkstyleTest {
+    exclude("**/build/generated-sources/**")
 }

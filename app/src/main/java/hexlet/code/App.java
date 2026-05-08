@@ -20,7 +20,7 @@ import java.util.Map;
 
 public class App {
 
-    private static final Logger log = LoggerFactory.getLogger(App.class);
+    private static final Logger LOG = LoggerFactory.getLogger(App.class);
 
     private static TemplateEngine createTemplateEngine() {
         ClassLoader classLoader = App.class.getClassLoader();
@@ -83,7 +83,7 @@ public class App {
                     ctx.redirect("/urls/" + url.getId());
                 }
             } catch (SQLException e) {
-                log.error("Database error", e);
+                LOG.error("Database error", e);
                 ctx.status(500).result("Database Error");
             }
         });
@@ -108,7 +108,7 @@ public class App {
                 page.setFlashType(ctx.consumeSessionAttribute("flash-type"));
                 ctx.render("urls/index.jte", Collections.singletonMap("page", page));
             } catch (SQLException e) {
-                log.error("Database error", e);
+                LOG.error("Database error", e);
                 ctx.status(500).result("Database Error");
             }
         });
@@ -126,7 +126,7 @@ public class App {
                 page.setFlashType(ctx.consumeSessionAttribute("flash-type"));
                 ctx.render("urls/show.jte", Collections.singletonMap("page", page));
             } catch (SQLException e) {
-                log.error("Database error", e);
+                LOG.error("Database error", e);
                 ctx.status(500).result("Database Error");
             }
         });
@@ -164,7 +164,7 @@ public class App {
                 ctx.sessionAttribute("flash-type", "success");
                 ctx.redirect("/urls/" + id);
             } catch (Exception e) {
-                log.error("Check failed", e);
+                LOG.error("Check failed", e);
                 ctx.sessionAttribute("flash", "Произошла ошибка при проверке");
                 ctx.sessionAttribute("flash-type", "danger");
                 ctx.redirect("/urls/" + id);

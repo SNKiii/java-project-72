@@ -26,8 +26,12 @@ public class UrlCheck {
     }
 
     private static String truncate(String text) {
-        if (text == null) return null;
-        if (text.length() <= 200) return text;
+        if (text == null) {
+            return null;
+        }
+        if (text.length() <= 200) {
+            return text;
+        }
         return text.substring(0, 200) + "...";
     }
 }
