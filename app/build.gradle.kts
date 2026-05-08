@@ -6,14 +6,14 @@ plugins {
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("gg.jte.gradle") version "3.1.12"
     id("jacoco")
-    id ("org.sonarqube") version "7.3.0.8198"
+    id("org.sonarqube") version "7.3.0.8198"
     id("checkstyle")
 }
 
 sonar {
     properties {
-        property ("sonar.projectKey", "SNKiii_java-project-72")
-        property ("sonar.organization", "snkiii")
+        property("sonar.projectKey", "SNKiii_java-project-72")
+        property("sonar.organization", "snkiii")
     }
 }
 
@@ -38,18 +38,16 @@ dependencies {
     implementation("com.zaxxer:HikariCP:5.0.1")
     compileOnly("org.projectlombok:lombok:1.18.30")
     annotationProcessor("org.projectlombok:lombok:1.18.30")
-    testImplementation(platform("org.junit:junit-bom:5.9.1"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
     implementation("org.postgresql:postgresql:42.7.3")
     implementation("org.jsoup:jsoup:1.17.2")
+    implementation("com.konghq:unirest-java:3.14.5")
+
     testImplementation(platform("org.junit:junit-bom:5.9.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.24.2")
     testImplementation("io.javalin:javalin-testtools:6.1.3")
     testImplementation("com.h2database:h2:2.2.220")
-    implementation("com.konghq:unirest-java:3.14.5")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-    implementation("com.konghq:unirest-java:3.14.5")
 }
 
 checkstyle {
@@ -73,6 +71,7 @@ jte {
     sourceDirectory.set(project.file("src/main/resources/templates").toPath())
     contentType.set(gg.jte.ContentType.Html)
 }
+
 tasks.shadowJar {
     mergeServiceFiles()
     archiveClassifier.set("")
@@ -80,6 +79,19 @@ tasks.shadowJar {
         attributes["Main-Class"] = "hexlet.code.App"
     }
 }
+
+tasks.distTar {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.distZip {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.startScripts {
+    dependsOn(tasks.shadowJar)
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports {
@@ -88,6 +100,7 @@ tasks.jacocoTestReport {
         csv.required.set(true)
     }
 }
+
 tasks.jacocoTestCoverageVerification {
     violationRules {
         rule {
@@ -97,13 +110,17 @@ tasks.jacocoTestCoverageVerification {
         }
     }
 }
+
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
 }
+
 tasks.checkstyleMain {
     exclude("**/build/generated-sources/**")
+    exclude("**/jte/**")
 }
 
 tasks.checkstyleTest {
     exclude("**/build/generated-sources/**")
+    exclude("**/jte/**")
 }
