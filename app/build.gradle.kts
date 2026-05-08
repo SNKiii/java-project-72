@@ -6,6 +6,14 @@ plugins {
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("gg.jte.gradle") version "3.1.12"
     id("jacoco")
+    id ("org.sonarqube") version "7.3.0.8198"
+}
+
+sonar {
+    properties {
+        property ("sonar.projectKey", "SNKiii_java-project-72")
+        property ("sonar.organization", "snkiii")
+    }
 }
 
 application {
