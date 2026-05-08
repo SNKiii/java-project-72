@@ -80,6 +80,10 @@ tasks.shadowJar {
     }
 }
 
+tasks.startShadowScripts {
+    dependsOn(tasks.jar)
+}
+
 tasks.distTar {
     dependsOn(tasks.shadowJar)
 }
