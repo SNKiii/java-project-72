@@ -1,5 +1,6 @@
-package hexlet.code;
+package hexlet.code.dto;
 
+import hexlet.code.model.Url;
 import lombok.Getter;
 import lombok.AllArgsConstructor;
 import java.util.List;

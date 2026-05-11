@@ -1,14 +1,18 @@
-package hexlet.code;
+package hexlet.code.DataBase;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.sql.SQLException;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class ConfigDB {
+
     public static HikariDataSource getJDBCUrl() {
         String jdbcUrl = System.getProperty("TEST_DATABASE_URL");
 
@@ -32,7 +36,7 @@ public class ConfigDB {
                     .getResourceAsStream("schema.sql");
 
             if (inputStream == null) {
-                System.err.println("schema.sql not found in resources");
+                log.error("schema.sql not found in resources");
                 return;
             }
 
@@ -48,18 +52,20 @@ public class ConfigDB {
                     if (!trimmed.isEmpty()) {
                         try {
                             stmt.execute(trimmed);
+                            log.debug("Executed SQL: {}", trimmed.substring(0, Math.min(trimmed.length(), 100)));
                         } catch (SQLException e) {
-                            // Игнорируем ошибки "таблица уже существует"
-                            if (!e.getMessage().contains("already exists")) {
-                                System.err.println("SQL Error: " + e.getMessage());
+                            if (e.getMessage().contains("already exists")) {
+                                log.debug("Table already exists, skipping: {}", e.getMessage());
+                            } else {
+                                log.error("SQL Error: {}", e.getMessage());
                             }
                         }
                     }
                 }
-                System.out.println("Database schema initialized successfully");
+                log.info("Database schema initialized successfully");
             }
         } catch (Exception e) {
-            System.err.println("Failed to initialize database schema: " + e.getMessage());
+            log.error("Failed to initialize database schema: {}", e.getMessage(), e);
         }
     }
 }

@@ -1,7 +1,7 @@
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import hexlet.code.App;
-import hexlet.code.BaseRepository;
+import hexlet.code.util.NamedRoutes;
 import io.javalin.Javalin;
 import io.javalin.testtools.JavalinTest;
 import okhttp3.mockwebserver.MockResponse;
@@ -31,7 +31,7 @@ class AppTest {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;");
         dataSource = new HikariDataSource(config);
-        BaseRepository.dataSource = dataSource;
+        hexlet.code.repository.BaseRepository.dataSource = dataSource;
 
         System.setProperty("TEST_DATABASE_URL", "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;");
 
@@ -86,7 +86,7 @@ class AppTest {
     @Test
     void testCreateUrlSuccess() {
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post("/urls", "url=https://example.com")) {
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=https://example.com")) {
                 assertThat(response.code()).isEqualTo(200);
             }
         });
@@ -95,8 +95,8 @@ class AppTest {
     @Test
     void testCreateUrlDuplicate() {
         JavalinTest.test(app, (server, client) -> {
-            client.post("/urls", "url=https://duplicate.com");
-            try (var response = client.post("/urls", "url=https://duplicate.com")) {
+            client.post(NamedRoutes.urlsPath(), "url=https://duplicate.com");
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=https://duplicate.com")) {
                 assertThat(response.code()).isEqualTo(200);
             }
         });
@@ -105,7 +105,7 @@ class AppTest {
     @Test
     void testCreateUrlInvalid() {
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post("/urls", "url=invalid")) {
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=invalid")) {
                 assertThat(response.code()).isEqualTo(422);
                 assertThat(response.body().string()).contains("Некорректный URL");
             }
@@ -115,8 +115,8 @@ class AppTest {
     @Test
     void testGetUrlById() {
         JavalinTest.test(app, (server, client) -> {
-            client.post("/urls", "url=https://test.com");
-            try (var response = client.get("/urls/1")) {
+            client.post(NamedRoutes.urlsPath(), "url=https://test.com");
+            try (var response = client.get(NamedRoutes.urlPath("1"))) {
                 assertThat(response.code()).isEqualTo(200);
                 assertThat(response.body().string()).contains("https://test.com");
             }
@@ -126,7 +126,7 @@ class AppTest {
     @Test
     void testGetUrlNotFound() {
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.get("/urls/99999")) {
+            try (var response = client.get(NamedRoutes.urlPath("99999"))) {
                 assertThat(response.code()).isEqualTo(404);
             }
         });
@@ -137,15 +137,41 @@ class AppTest {
         String mockHtml = """
             <html>
                 <head><title>Test Title</title></head>
-                <body><h1>Test H1</h1>
-                <meta name="description" content="Test Description"></body>
+                <body>
+                    <h1>Test H1</h1>
+                    <meta name="description" content="Test Description">
+                </body>
             </html>
             """;
         mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
 
         JavalinTest.test(app, (server, client) -> {
-            client.post("/urls", "url=" + mockServerUrl);
-            try (var response = client.post("/urls/1/checks", "")) {
+            client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl);
+            try (var response = client.post(NamedRoutes.urlChecksPath("1"), "")) {
+                assertThat(response.code()).isEqualTo(200);
+            }
+        });
+    }
+
+    @Test
+    void testCheckUrlTruncatesLongText() {
+        String longText = "a".repeat(300);
+        String truncatedText = "a".repeat(200) + "...";
+
+        String mockHtml = """
+            <html>
+                <head><title>%s</title></head>
+                <body>
+                    <h1>%s</h1>
+                    <meta name="description" content="%s">
+                </body>
+            </html>
+            """.formatted(longText, longText, longText);
+        mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
+
+        JavalinTest.test(app, (server, client) -> {
+            client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl);
+            try (var response = client.post(NamedRoutes.urlChecksPath("1"), "")) {
                 assertThat(response.code()).isEqualTo(200);
             }
         });
@@ -156,8 +182,8 @@ class AppTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(404));
 
         JavalinTest.test(app, (server, client) -> {
-            client.post("/urls", "url=" + mockServerUrl);
-            try (var response = client.post("/urls/1/checks", "")) {
+            client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl);
+            try (var response = client.post(NamedRoutes.urlChecksPath("1"), "")) {
                 assertThat(response.code()).isEqualTo(200);
             }
         });
@@ -166,8 +192,8 @@ class AppTest {
     @Test
     void testUrlPageShowsDataTestAttributes() {
         JavalinTest.test(app, (server, client) -> {
-            client.post("/urls", "url=https://example.com");
-            try (var response = client.get("/urls/1")) {
+            client.post(NamedRoutes.urlsPath(), "url=https://example.com");
+            try (var response = client.get(NamedRoutes.urlPath("1"))) {
                 String body = response.body().string();
                 assertThat(response.code()).isEqualTo(200);
                 assertThat(body).contains("data-test=\"url\"");

@@ -1,4 +1,4 @@
-@import hexlet.code.BasePage
+@import hexlet.code.dto.BasePage
 @param BasePage page = null
 
 @template.layout(

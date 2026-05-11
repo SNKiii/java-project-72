@@ -1,5 +1,5 @@
-@import hexlet.code.UrlPage
-@import hexlet.code.UrlCheck
+@import hexlet.code.dto.UrlPage
+@import hexlet.code.model.UrlCheck
 @param UrlPage page
 
 @template.layout(page = page, content = @`

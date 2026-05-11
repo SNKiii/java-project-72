@@ -1,4 +1,6 @@
-package hexlet.code;
+package hexlet.code.repository;
+
+import hexlet.code.model.UrlCheck;
 
 import java.sql.SQLException;
 import java.sql.Statement;
