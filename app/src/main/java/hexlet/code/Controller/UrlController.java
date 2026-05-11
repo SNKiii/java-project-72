@@ -42,6 +42,15 @@ public class UrlController {
             return;
         }
 
+        if (!inputUrl.matches("^https?://.*$")) {
+            log.warn("Invalid URL (missing protocol): {}", inputUrl);
+            BasePage page = new BasePage();
+            page.setError("Некорректный URL");
+            ctx.status(422);
+            ctx.render("index.jte", Map.of("page", page));
+            return;
+        }
+
         URI parsedUrl;
         try {
             parsedUrl = new URI(inputUrl);
@@ -54,8 +63,11 @@ public class UrlController {
             return;
         }
 
-        if (parsedUrl.getScheme() == null || parsedUrl.getHost() == null) {
-            log.warn("Invalid URL (missing scheme or host): {}", inputUrl);
+        String scheme = parsedUrl.getScheme();
+        String host = parsedUrl.getHost();
+
+        if (scheme == null || host == null || (!scheme.equals("http") && !scheme.equals("https"))) {
+            log.warn("Invalid URL (invalid scheme or missing host): {}", inputUrl);
             BasePage page = new BasePage();
             page.setError("Некорректный URL");
             ctx.status(422);
@@ -65,8 +77,8 @@ public class UrlController {
 
         String normalizedUrl = String.format(
                 "%s://%s%s",
-                parsedUrl.getScheme().toLowerCase(),
-                parsedUrl.getHost().toLowerCase(),
+                scheme.toLowerCase(),
+                host.toLowerCase(),
                 parsedUrl.getPort() == -1 ? "" : ":" + parsedUrl.getPort()
         );
 
