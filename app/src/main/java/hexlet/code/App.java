@@ -3,11 +3,12 @@ package hexlet.code;
 import gg.jte.ContentType;
 import gg.jte.TemplateEngine;
 import gg.jte.resolve.ResourceCodeResolver;
-import hexlet.code.Controller.UrlController;
-import hexlet.code.DataBase.ConfigDB;
+import hexlet.code.controller.UrlController;
+import hexlet.code.dataBase.ConfigDB;
 import hexlet.code.repository.BaseRepository;
 import hexlet.code.util.NamedRoutes;
 import io.javalin.Javalin;
+import io.javalin.http.HttpStatus;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.rendering.template.JavalinJte;
 import lombok.extern.slf4j.Slf4j;
@@ -33,20 +34,18 @@ public class App {
 
         app.exception(SQLException.class, (e, ctx) -> {
             log.error("Database error: {}", e.getMessage(), e);
-            ctx.status(500).result("Database Error");
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).result("Database Error");
         });
 
         app.exception(Exception.class, (e, ctx) -> {
             log.error("Unexpected error for {} {}: {}", ctx.method(), ctx.path(), e.getMessage(), e);
-            ctx.status(500).result("Internal Server Error");
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR).result("Internal Server Error");
         });
-
 
         app.exception(NotFoundResponse.class, (e, ctx) -> {
             log.warn("Not found: {}", ctx.path());
-            ctx.status(404).result("Page not found");
+            ctx.status(HttpStatus.NOT_FOUND).result("Page not found");
         });
-
 
         app.get(NamedRoutes.rootPath(), UrlController::homePage);
         app.post(NamedRoutes.urlsPath(), UrlController::createUrl);

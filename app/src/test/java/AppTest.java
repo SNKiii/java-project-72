@@ -89,6 +89,15 @@ class AppTest {
             try (var response = client.post(NamedRoutes.urlsPath(), "url=https://example.com")) {
                 assertThat(response.code()).isEqualTo(200);
             }
+
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery("SELECT COUNT(*) FROM urls WHERE name = 'https://example.com'")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(1);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
         });
     }
 
@@ -96,8 +105,18 @@ class AppTest {
     void testCreateUrlDuplicate() {
         JavalinTest.test(app, (server, client) -> {
             client.post(NamedRoutes.urlsPath(), "url=https://duplicate.com");
+
             try (var response = client.post(NamedRoutes.urlsPath(), "url=https://duplicate.com")) {
                 assertThat(response.code()).isEqualTo(200);
+            }
+
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery("SELECT COUNT(*) FROM urls WHERE name = 'https://duplicate.com'")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(1);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
         });
     }
@@ -115,8 +134,24 @@ class AppTest {
     @Test
     void testGetUrlById() {
         JavalinTest.test(app, (server, client) -> {
-            client.post(NamedRoutes.urlsPath(), "url=https://test.com");
-            try (var response = client.get(NamedRoutes.urlPath("1"))) {
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=https://test.com")) {
+                assertThat(response.code()).isEqualTo(200);
+            }
+
+            Long urlId = null;
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery("SELECT id FROM urls WHERE name = 'https://test.com'")) {
+                if (rs.next()) {
+                    urlId = rs.getLong("id");
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+
+            assertThat(urlId).isNotNull();
+
+            try (var response = client.get(NamedRoutes.urlPath(urlId.toString()))) {
                 assertThat(response.code()).isEqualTo(200);
                 assertThat(response.body().string()).contains("https://test.com");
             }
@@ -146,9 +181,39 @@ class AppTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
 
         JavalinTest.test(app, (server, client) -> {
-            client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl);
-            try (var response = client.post(NamedRoutes.urlChecksPath("1"), "")) {
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl)) {
                 assertThat(response.code()).isEqualTo(200);
+            }
+
+            Long urlId = null;
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery("SELECT id FROM urls")) {
+                if (rs.next()) {
+                    urlId = rs.getLong("id");
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+
+            assertThat(urlId).isNotNull();
+
+            try (var response = client.post(NamedRoutes.urlChecksPath(urlId.toString()), "")) {
+                assertThat(response.code()).isEqualTo(200);
+            }
+
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.prepareStatement(
+                         "SELECT status_code, title, h1, description FROM url_checks WHERE url_id = ?")) {
+                stmt.setLong(1, urlId);
+                var rs = stmt.executeQuery();
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getInt("status_code")).isEqualTo(200);
+                assertThat(rs.getString("title")).isEqualTo("Test Title");
+                assertThat(rs.getString("h1")).isEqualTo("Test H1");
+                assertThat(rs.getString("description")).isEqualTo("Test Description");
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
         });
     }
@@ -170,9 +235,38 @@ class AppTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
 
         JavalinTest.test(app, (server, client) -> {
-            client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl);
-            try (var response = client.post(NamedRoutes.urlChecksPath("1"), "")) {
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl)) {
                 assertThat(response.code()).isEqualTo(200);
+            }
+
+            Long urlId = null;
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery("SELECT id FROM urls")) {
+                if (rs.next()) {
+                    urlId = rs.getLong("id");
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+
+            assertThat(urlId).isNotNull();
+
+            try (var response = client.post(NamedRoutes.urlChecksPath(urlId.toString()), "")) {
+                assertThat(response.code()).isEqualTo(200);
+            }
+
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.prepareStatement(
+                         "SELECT title, h1, description FROM url_checks WHERE url_id = ?")) {
+                stmt.setLong(1, urlId);
+                var rs = stmt.executeQuery();
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getString("title")).isEqualTo(truncatedText);
+                assertThat(rs.getString("h1")).isEqualTo(truncatedText);
+                assertThat(rs.getString("description")).isEqualTo(truncatedText);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
         });
     }
@@ -182,9 +276,35 @@ class AppTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(404));
 
         JavalinTest.test(app, (server, client) -> {
-            client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl);
-            try (var response = client.post(NamedRoutes.urlChecksPath("1"), "")) {
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl)) {
                 assertThat(response.code()).isEqualTo(200);
+            }
+
+            Long urlId = null;
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery("SELECT id FROM urls")) {
+                if (rs.next()) {
+                    urlId = rs.getLong("id");
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+
+            assertThat(urlId).isNotNull();
+
+            try (var response = client.post(NamedRoutes.urlChecksPath(urlId.toString()), "")) {
+                assertThat(response.code()).isEqualTo(200);
+            }
+
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.prepareStatement("SELECT COUNT(*) FROM url_checks WHERE url_id = ?")) {
+                stmt.setLong(1, urlId);
+                var rs = stmt.executeQuery();
+                rs.next();
+                assertThat(rs.getInt(1)).isZero();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
         });
     }
@@ -192,13 +312,29 @@ class AppTest {
     @Test
     void testUrlPageShowsDataTestAttributes() {
         JavalinTest.test(app, (server, client) -> {
-            client.post(NamedRoutes.urlsPath(), "url=https://example.com");
-            try (var response = client.get(NamedRoutes.urlPath("1"))) {
+            try (var response = client.post(NamedRoutes.urlsPath(), "url=https://example.com")) {
+                assertThat(response.code()).isEqualTo(200);
+            }
+
+            Long urlId = null;
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement();
+                 var rs = stmt.executeQuery("SELECT id FROM urls WHERE name = 'https://example.com'")) {
+                if (rs.next()) {
+                    urlId = rs.getLong("id");
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+
+            assertThat(urlId).isNotNull();
+
+            try (var response = client.get(NamedRoutes.urlPath(urlId.toString()))) {
                 String body = response.body().string();
                 assertThat(response.code()).isEqualTo(200);
                 assertThat(body).contains("data-test=\"url\"");
                 assertThat(body).contains("method=\"post\"");
-                assertThat(body).contains("action=\"/urls/1/checks\"");
+                assertThat(body).contains("action=\"/urls/" + urlId + "/checks\"");
                 assertThat(body).contains("data-test=\"checks\"");
             }
         });

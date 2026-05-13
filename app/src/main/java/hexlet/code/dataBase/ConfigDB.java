@@ -1,4 +1,4 @@
-package hexlet.code.DataBase;
+package hexlet.code.dataBase;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -52,11 +52,8 @@ public class ConfigDB {
                     if (!trimmed.isEmpty()) {
                         try {
                             stmt.execute(trimmed);
-                            log.debug("Executed SQL: {}", trimmed.substring(0, Math.min(trimmed.length(), 100)));
                         } catch (SQLException e) {
-                            if (e.getMessage().contains("already exists")) {
-                                log.debug("Table already exists, skipping: {}", e.getMessage());
-                            } else {
+                            if (!e.getMessage().contains("already exists")) {
                                 log.error("SQL Error: {}", e.getMessage());
                             }
                         }

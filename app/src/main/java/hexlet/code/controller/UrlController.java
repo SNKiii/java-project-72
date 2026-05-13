@@ -1,4 +1,4 @@
-package hexlet.code.Controller;
+package hexlet.code.controller;
 
 import hexlet.code.dto.BasePage;
 import hexlet.code.dto.UrlPage;
@@ -101,15 +101,14 @@ public class UrlController {
 
     public static void listUrls(Context ctx) throws SQLException {
         var urls = UrlRepository.getEntities();
+        var latestChecks = UrlCheckRepository.findLatestChecks();
+
         Map<Long, Integer> lastCheckCode = new HashMap<>();
         Map<Long, LocalDateTime> lastCheckDate = new HashMap<>();
 
-        for (var url : urls) {
-            var lastCheck = UrlCheckRepository.getLastCheckByUrlId(url.getId());
-            lastCheck.ifPresent(check -> {
-                lastCheckCode.put(url.getId(), check.getStatusCode());
-                lastCheckDate.put(url.getId(), check.getCreatedAt());
-            });
+        for (var entry : latestChecks.entrySet()) {
+            lastCheckCode.put(entry.getKey(), entry.getValue().getStatusCode());
+            lastCheckDate.put(entry.getKey(), entry.getValue().getCreatedAt());
         }
 
         var page = new UrlsPage(urls, lastCheckCode, lastCheckDate);
@@ -138,36 +137,49 @@ public class UrlController {
 
         log.info("Starting check for URL: {}", url.getName());
 
-        var response = Unirest.get(url.getName()).asString();
-        int statusCode = response.getStatus();
+        try {
+            var response = Unirest.get(url.getName())
+                    .connectTimeout(5000)
+                    .socketTimeout(10000)
+                    .asString();
 
-        log.info("HTTP status code for {}: {}", url.getName(), statusCode);
+            int statusCode = response.getStatus();
+            log.info("HTTP status code for {}: {}", url.getName(), statusCode);
 
-        if (statusCode >= 400) {
-            log.warn("Check failed with status {} for {}", statusCode, url.getName());
+            if (statusCode >= 400) {
+                log.warn("Check failed with status {} for {}", statusCode, url.getName());
+                ctx.sessionAttribute("flash", "Произошла ошибка при проверке");
+                ctx.sessionAttribute("flash-type", "danger");
+                ctx.redirect(NamedRoutes.urlPath(id));
+                return;
+            }
+
+            String html = response.getBody();
+            var doc = Jsoup.parse(html);
+
+            String title = doc.title();
+            String h1 = doc.select("h1").first() != null ? doc.select("h1").first().text() : null;
+            String description = doc.select("meta[name=description]").first() != null
+                    ? doc.select("meta[name=description]").first().attr("content") : null;
+
+            log.info("Parsed data - Title: {}, H1: {}, Description length: {}",
+                    title, h1, description != null ? description.length() : 0);
+
+            var check = new UrlCheck(id, statusCode, title, h1, description);
+            UrlCheckRepository.save(check);
+
+            log.info("Check saved successfully for URL id={}", id);
+            ctx.sessionAttribute("flash", "Страница успешно проверена");
+            ctx.sessionAttribute("flash-type", "success");
+            ctx.redirect(NamedRoutes.urlPath(id));
+
+        } catch (Exception e) {
+            log.error("Failed to check URL id={}, name={}: {}",
+                    id, url.getName(), e.getMessage(), e);
+
             ctx.sessionAttribute("flash", "Произошла ошибка при проверке");
             ctx.sessionAttribute("flash-type", "danger");
             ctx.redirect(NamedRoutes.urlPath(id));
-            return;
         }
-
-        String html = response.getBody();
-        var doc = Jsoup.parse(html);
-
-        String title = doc.title();
-        String h1 = doc.select("h1").first() != null ? doc.select("h1").first().text() : null;
-        String description = doc.select("meta[name=description]").first() != null
-                ? doc.select("meta[name=description]").first().attr("content") : null;
-
-        log.info("Parsed data - Title: {}, H1: {}, Description length: {}",
-                title, h1, description != null ? description.length() : 0);
-
-        var check = new UrlCheck(id, statusCode, title, h1, description);
-        UrlCheckRepository.save(check);
-
-        log.info("Check saved successfully for URL id={}", id);
-        ctx.sessionAttribute("flash", "Страница успешно проверена");
-        ctx.sessionAttribute("flash-type", "success");
-        ctx.redirect(NamedRoutes.urlPath(id));
     }
 }

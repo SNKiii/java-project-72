@@ -7,15 +7,17 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public class UrlCheckRepository extends BaseRepository {
 
     public static void save(UrlCheck check) throws SQLException {
-        String sql = "INSERT INTO url_checks (url_id, status_code, title,"
+        String sql = "INSERT INTO url_checks (url_id, status_code, title, h1, "
                 +
-                " h1, description, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+                "description, created_at) VALUES (?, ?, ?, ?, ?, ?)";
 
         try (var conn = dataSource.getConnection();
              var stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -84,6 +86,35 @@ public class UrlCheckRepository extends BaseRepository {
                 return Optional.of(check);
             }
             return Optional.empty();
+        }
+    }
+
+    public static Map<Long, UrlCheck> findLatestChecks() throws SQLException {
+        String sql = """
+            SELECT DISTINCT ON (url_id) *
+            FROM url_checks
+            ORDER BY url_id DESC, id DESC
+            """;
+
+        try (var conn = dataSource.getConnection();
+             var stmt = conn.createStatement();
+             var rs = stmt.executeQuery(sql)) {
+
+            var result = new HashMap<Long, UrlCheck>();
+
+            while (rs.next()) {
+                var check = new UrlCheck(
+                        rs.getLong("id"),
+                        rs.getLong("url_id"),
+                        rs.getInt("status_code"),
+                        rs.getString("title"),
+                        rs.getString("h1"),
+                        rs.getString("description"),
+                        rs.getTimestamp("created_at").toLocalDateTime()
+                );
+                result.put(check.getUrlId(), check);
+            }
+            return result;
         }
     }
 }
