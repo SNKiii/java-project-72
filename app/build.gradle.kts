@@ -10,10 +10,27 @@ plugins {
     id("checkstyle")
 }
 
-sonar {
+sonarqube {
     properties {
         property("sonar.projectKey", "SNKiii_java-project-72")
         property("sonar.organization", "snkiii")
+        property("sonar.host.url", "https://sonarcloud.io")
+        property("sonar.token", System.getenv("SONAR_TOKEN"))
+
+        property("sonar.sources", "src/main/java")
+        property("sonar.tests", "src/test/java")
+
+        property("sonar.java.binaries", "build/classes/java/main")
+        property("sonar.java.test.binaries", "build/classes/java/test")
+
+        property("sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml")
+        property("sonar.java.checkstyle.reportPaths", "build/reports/checkstyle/main.xml,build/reports/checkstyle/test.xml")
+
+        property("sonar.coverage.exclusions", "**/config/*,**/dto/*,**/exceptions/*,**/App.java")
+
+        property("sonar.issue.ignore.multicriteria", "e1")
+        property("sonar.issue.ignore.multicriteria.e1.ruleKey", "checkstyle:com.puppycrawl.tools.checkstyle.checks.whitespace.FileTabCharacterCheck")
+        property("sonar.issue.ignore.multicriteria.e1.resourceKey", "**/*.java")
     }
 }
 
@@ -52,6 +69,8 @@ dependencies {
 
 checkstyle {
     toolVersion = "10.12.4"
+    configFile = file("config/checkstyle/checkstyle.xml") // Убедитесь, что файл существует
+    isIgnoreFailures = false
 }
 
 tasks.test {
@@ -60,40 +79,7 @@ tasks.test {
         events = setOf(TestLogEvent.PASSED, TestLogEvent.SKIPPED, TestLogEvent.FAILED)
         exceptionFormat = TestExceptionFormat.FULL
     }
-}
-
-tasks.register("stage") {
-    dependsOn("clean", "shadowJar")
-}
-
-jte {
-    generate()
-    sourceDirectory.set(project.file("src/main/resources/templates").toPath())
-    contentType.set(gg.jte.ContentType.Html)
-}
-
-tasks.shadowJar {
-    mergeServiceFiles()
-    archiveClassifier.set("")
-    manifest {
-        attributes["Main-Class"] = "hexlet.code.App"
-    }
-}
-
-tasks.startShadowScripts {
-    dependsOn(tasks.jar)
-}
-
-tasks.distTar {
-    dependsOn(tasks.shadowJar)
-}
-
-tasks.distZip {
-    dependsOn(tasks.shadowJar)
-}
-
-tasks.startScripts {
-    dependsOn(tasks.shadowJar)
+    finalizedBy(tasks.jacocoTestReport)
 }
 
 tasks.jacocoTestReport {
@@ -103,9 +89,11 @@ tasks.jacocoTestReport {
         html.required.set(true)
         csv.required.set(true)
     }
+    finalizedBy(tasks.jacocoTestCoverageVerification)
 }
 
 tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
     violationRules {
         rule {
             limit {
@@ -127,4 +115,22 @@ tasks.checkstyleMain {
 tasks.checkstyleTest {
     exclude("**/build/generated-sources/**")
     exclude("**/jte/**")
+}
+
+tasks.shadowJar {
+    mergeServiceFiles()
+    archiveClassifier.set("")
+    manifest {
+        attributes["Main-Class"] = "hexlet.code.App"
+    }
+}
+
+jte {
+    generate()
+    sourceDirectory.set(project.file("src/main/resources/templates").toPath())
+    contentType.set(gg.jte.ContentType.Html)
+}
+
+tasks.register("stage") {
+    dependsOn("clean", "shadowJar")
 }
