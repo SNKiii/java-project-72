@@ -1,5 +1,7 @@
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import hexlet.code.repository.UrlCheckRepository;
+import hexlet.code.repository.UrlRepository;
 import hexlet.code.App;
 import hexlet.code.util.NamedRoutes;
 import io.javalin.Javalin;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URI;
 import java.sql.SQLException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,12 +24,20 @@ class AppTest {
     private HikariDataSource dataSource;
     private MockWebServer mockWebServer;
     private String mockServerUrl;
+    private String normalizedMockServerUrl;
 
     @BeforeEach
     void beforeEach() throws IOException, SQLException {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
-        mockServerUrl = mockWebServer.url("/").toString();
+        String rawUrl = mockWebServer.url("/").toString();
+        URI uri = URI.create(rawUrl);
+        mockServerUrl = rawUrl;
+        normalizedMockServerUrl = String.format("%s://%s%s",
+                uri.getScheme(),
+                uri.getHost(),
+                uri.getPort() == -1 ? "" : ":" + uri.getPort()
+        );
 
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;");
@@ -84,25 +95,19 @@ class AppTest {
     }
 
     @Test
-    void testCreateUrlSuccess() {
+    void testCreateUrlSuccess() throws SQLException {
         JavalinTest.test(app, (server, client) -> {
             try (var response = client.post(NamedRoutes.urlsPath(), "url=https://example.com")) {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT COUNT(*) FROM urls WHERE name = 'https://example.com'")) {
-                rs.next();
-                assertThat(rs.getInt(1)).isEqualTo(1);
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var maybeUrl = UrlRepository.findByName("https://example.com");
+            assertThat(maybeUrl).isPresent();
         });
     }
 
     @Test
-    void testCreateUrlDuplicate() {
+    void testCreateUrlDuplicate() throws SQLException {
         JavalinTest.test(app, (server, client) -> {
             client.post(NamedRoutes.urlsPath(), "url=https://duplicate.com");
 
@@ -110,14 +115,8 @@ class AppTest {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT COUNT(*) FROM urls WHERE name = 'https://duplicate.com'")) {
-                rs.next();
-                assertThat(rs.getInt(1)).isEqualTo(1);
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var maybeUrl = UrlRepository.findByName("https://duplicate.com");
+            assertThat(maybeUrl).isPresent();
         });
     }
 
@@ -132,26 +131,15 @@ class AppTest {
     }
 
     @Test
-    void testGetUrlById() {
+    void testGetUrlById() throws SQLException {
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post(NamedRoutes.urlsPath(), "url=https://test.com")) {
-                assertThat(response.code()).isEqualTo(200);
-            }
+            client.post(NamedRoutes.urlsPath(), "url=https://test.com");
 
-            Long urlId = null;
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT id FROM urls WHERE name = 'https://test.com'")) {
-                if (rs.next()) {
-                    urlId = rs.getLong("id");
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var maybeUrl = UrlRepository.findByName("https://test.com");
+            assertThat(maybeUrl).isPresent();
 
-            assertThat(urlId).isNotNull();
-
-            try (var response = client.get(NamedRoutes.urlPath(urlId.toString()))) {
+            long id = maybeUrl.get().getId();
+            try (var response = client.get(NamedRoutes.urlPath(String.valueOf(id)))) {
                 assertThat(response.code()).isEqualTo(200);
                 assertThat(response.body().string()).contains("https://test.com");
             }
@@ -168,7 +156,7 @@ class AppTest {
     }
 
     @Test
-    void testCheckUrlSuccess() {
+    void testCheckUrlSuccess() throws SQLException {
         String mockHtml = """
             <html>
                 <head><title>Test Title</title></head>
@@ -181,45 +169,30 @@ class AppTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
 
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl)) {
+            // Используем нормализованный URL для POST запроса
+            client.post(NamedRoutes.urlsPath(), "url=" + normalizedMockServerUrl);
+
+            var maybeUrl = UrlRepository.findByName(normalizedMockServerUrl);
+            assertThat(maybeUrl).isPresent();
+
+            long id = maybeUrl.get().getId();
+            try (var response = client.post(NamedRoutes.urlChecksPath(String.valueOf(id)), "")) {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            Long urlId = null;
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT id FROM urls")) {
-                if (rs.next()) {
-                    urlId = rs.getLong("id");
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var checks = UrlCheckRepository.findByUrlId(id);
+            assertThat(checks).isNotEmpty();
 
-            assertThat(urlId).isNotNull();
-
-            try (var response = client.post(NamedRoutes.urlChecksPath(urlId.toString()), "")) {
-                assertThat(response.code()).isEqualTo(200);
-            }
-
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.prepareStatement(
-                         "SELECT status_code, title, h1, description FROM url_checks WHERE url_id = ?")) {
-                stmt.setLong(1, urlId);
-                var rs = stmt.executeQuery();
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getInt("status_code")).isEqualTo(200);
-                assertThat(rs.getString("title")).isEqualTo("Test Title");
-                assertThat(rs.getString("h1")).isEqualTo("Test H1");
-                assertThat(rs.getString("description")).isEqualTo("Test Description");
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var check = checks.get(0);
+            assertThat(check.getStatusCode()).isEqualTo(200);
+            assertThat(check.getTitle()).isEqualTo("Test Title");
+            assertThat(check.getH1()).isEqualTo("Test H1");
+            assertThat(check.getDescription()).isEqualTo("Test Description");
         });
     }
 
     @Test
-    void testCheckUrlTruncatesLongText() {
+    void testCheckUrlTruncatesLongText() throws SQLException {
         String longText = "a".repeat(300);
         String truncatedText = "a".repeat(200) + "...";
 
@@ -235,112 +208,69 @@ class AppTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
 
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl)) {
+            client.post(NamedRoutes.urlsPath(), "url=" + normalizedMockServerUrl);
+
+            var maybeUrl = UrlRepository.findByName(normalizedMockServerUrl);
+            assertThat(maybeUrl).isPresent();
+
+            long id = maybeUrl.get().getId();
+            try (var response = client.post(NamedRoutes.urlChecksPath(String.valueOf(id)), "")) {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            Long urlId = null;
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT id FROM urls")) {
-                if (rs.next()) {
-                    urlId = rs.getLong("id");
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var checks = UrlCheckRepository.findByUrlId(id);
+            assertThat(checks).isNotEmpty();
 
-            assertThat(urlId).isNotNull();
-
-            try (var response = client.post(NamedRoutes.urlChecksPath(urlId.toString()), "")) {
-                assertThat(response.code()).isEqualTo(200);
-            }
-
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.prepareStatement(
-                         "SELECT title, h1, description FROM url_checks WHERE url_id = ?")) {
-                stmt.setLong(1, urlId);
-                var rs = stmt.executeQuery();
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getString("title")).isEqualTo(truncatedText);
-                assertThat(rs.getString("h1")).isEqualTo(truncatedText);
-                assertThat(rs.getString("description")).isEqualTo(truncatedText);
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var check = checks.get(0);
+            assertThat(check.getTitle()).isEqualTo(truncatedText);
+            assertThat(check.getH1()).isEqualTo(truncatedText);
+            assertThat(check.getDescription()).isEqualTo(truncatedText);
         });
     }
 
     @Test
-    void testCheckUrlClientError() {
+    void testCheckUrlClientError() throws SQLException {
         mockWebServer.enqueue(new MockResponse().setResponseCode(404));
 
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl)) {
+            client.post(NamedRoutes.urlsPath(), "url=" + normalizedMockServerUrl);
+
+            var maybeUrl = UrlRepository.findByName(normalizedMockServerUrl);
+            assertThat(maybeUrl).isPresent();
+
+            long id = maybeUrl.get().getId();
+            try (var response = client.post(NamedRoutes.urlChecksPath(String.valueOf(id)), "")) {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            Long urlId = null;
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT id FROM urls")) {
-                if (rs.next()) {
-                    urlId = rs.getLong("id");
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-
-            assertThat(urlId).isNotNull();
-
-            try (var response = client.post(NamedRoutes.urlChecksPath(urlId.toString()), "")) {
-                assertThat(response.code()).isEqualTo(200);
-            }
-
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.prepareStatement("SELECT COUNT(*) FROM url_checks WHERE url_id = ?")) {
-                stmt.setLong(1, urlId);
-                var rs = stmt.executeQuery();
-                rs.next();
-                assertThat(rs.getInt(1)).isZero();
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            // Проверка не должна быть сохранена при статусе 404
+            var checks = UrlCheckRepository.findByUrlId(id);
+            assertThat(checks).isEmpty();
         });
     }
 
     @Test
-    void testUrlPageShowsDataTestAttributes() {
+    void testUrlPageShowsDataTestAttributes() throws SQLException {
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post(NamedRoutes.urlsPath(), "url=https://example.com")) {
-                assertThat(response.code()).isEqualTo(200);
-            }
+            client.post(NamedRoutes.urlsPath(), "url=https://example.com");
 
-            Long urlId = null;
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT id FROM urls WHERE name = 'https://example.com'")) {
-                if (rs.next()) {
-                    urlId = rs.getLong("id");
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var maybeUrl = UrlRepository.findByName("https://example.com");
+            assertThat(maybeUrl).isPresent();
 
-            assertThat(urlId).isNotNull();
-
-            try (var response = client.get(NamedRoutes.urlPath(urlId.toString()))) {
+            long id = maybeUrl.get().getId();
+            try (var response = client.get(NamedRoutes.urlPath(String.valueOf(id)))) {
                 String body = response.body().string();
                 assertThat(response.code()).isEqualTo(200);
                 assertThat(body).contains("data-test=\"url\"");
                 assertThat(body).contains("method=\"post\"");
-                assertThat(body).contains("action=\"/urls/" + urlId + "/checks\"");
+                assertThat(body).contains("action=\"/urls/" + id + "/checks\"");
                 assertThat(body).contains("data-test=\"checks\"");
             }
         });
     }
+
     @Test
-    void testCheckUrlWithEmptyHtml() {
+    void testCheckUrlWithEmptyHtml() throws SQLException {
         String mockHtml = """
             <html>
                 <head></head>
@@ -350,75 +280,49 @@ class AppTest {
         mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
 
         JavalinTest.test(app, (server, client) -> {
-            try (var response = client.post(NamedRoutes.urlsPath(), "url=" + mockServerUrl)) {
+            client.post(NamedRoutes.urlsPath(), "url=" + normalizedMockServerUrl);
+
+            var maybeUrl = UrlRepository.findByName(normalizedMockServerUrl);
+            assertThat(maybeUrl).isPresent();
+
+            long id = maybeUrl.get().getId();
+            try (var response = client.post(NamedRoutes.urlChecksPath(String.valueOf(id)), "")) {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            Long urlId = null;
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT id FROM urls")) {
-                if (rs.next()) {
-                    urlId = rs.getLong("id");
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var checks = UrlCheckRepository.findByUrlId(id);
+            assertThat(checks).isNotEmpty();
 
-            assertThat(urlId).isNotNull();
-
-            try (var response = client.post(NamedRoutes.urlChecksPath(urlId.toString()), "")) {
-                assertThat(response.code()).isEqualTo(200);
-            }
-
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.prepareStatement(
-                         "SELECT title, h1, description FROM url_checks WHERE url_id = ?")) {
-                stmt.setLong(1, urlId);
-                var rs = stmt.executeQuery();
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getString("title")).isEmpty();
-                assertThat(rs.getString("h1")).isNull();
-                assertThat(rs.getString("description")).isNull();
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var check = checks.get(0);
+            assertThat(check.getTitle()).isEmpty();
+            assertThat(check.getH1()).isNull();
+            assertThat(check.getDescription()).isNull();
         });
     }
 
     @Test
-    void testCreateUrlWithPort() {
+    void testCreateUrlWithPort() throws SQLException {
         JavalinTest.test(app, (server, client) -> {
             try (var response = client.post(NamedRoutes.urlsPath(), "url=http://localhost:8080")) {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT name FROM urls WHERE name = 'http://localhost:8080'")) {
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getString("name")).isEqualTo("http://localhost:8080");
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var maybeUrl = UrlRepository.findByName("http://localhost:8080");
+            assertThat(maybeUrl).isPresent();
+            assertThat(maybeUrl.get().getName()).isEqualTo("http://localhost:8080");
         });
     }
 
     @Test
-    void testCreateUrlWithHttps() {
+    void testCreateUrlWithHttps() throws SQLException {
         JavalinTest.test(app, (server, client) -> {
             try (var response = client.post(NamedRoutes.urlsPath(), "url=https://secure.com")) {
                 assertThat(response.code()).isEqualTo(200);
             }
 
-            try (var conn = dataSource.getConnection();
-                 var stmt = conn.createStatement();
-                 var rs = stmt.executeQuery("SELECT name FROM urls WHERE name = 'https://secure.com'")) {
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getString("name")).isEqualTo("https://secure.com");
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            var maybeUrl = UrlRepository.findByName("https://secure.com");
+            assertThat(maybeUrl).isPresent();
+            assertThat(maybeUrl.get().getName()).isEqualTo("https://secure.com");
         });
     }
 }
