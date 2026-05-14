@@ -16,21 +16,11 @@ sonarqube {
         property("sonar.organization", "snkiii")
         property("sonar.host.url", "https://sonarcloud.io")
         property("sonar.token", System.getenv("SONAR_TOKEN"))
-
         property("sonar.sources", "src/main/java")
         property("sonar.tests", "src/test/java")
-
         property("sonar.java.binaries", "build/classes/java/main")
         property("sonar.java.test.binaries", "build/classes/java/test")
-
         property("sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml")
-        property("sonar.java.checkstyle.reportPaths", "build/reports/checkstyle/main.xml,build/reports/checkstyle/test.xml")
-
-        property("sonar.coverage.exclusions", "**/config/*,**/dto/*,**/exceptions/*,**/App.java")
-
-        property("sonar.issue.ignore.multicriteria", "e1")
-        property("sonar.issue.ignore.multicriteria.e1.ruleKey", "checkstyle:com.puppycrawl.tools.checkstyle.checks.whitespace.FileTabCharacterCheck")
-        property("sonar.issue.ignore.multicriteria.e1.resourceKey", "**/*.java")
     }
 }
 
@@ -69,8 +59,6 @@ dependencies {
 
 checkstyle {
     toolVersion = "10.12.4"
-    configFile = file("config/checkstyle/checkstyle.xml") // Убедитесь, что файл существует
-    isIgnoreFailures = false
 }
 
 tasks.test {
@@ -117,6 +105,12 @@ tasks.checkstyleTest {
     exclude("**/jte/**")
 }
 
+jte {
+    generate()
+    sourceDirectory.set(project.file("src/main/resources/templates").toPath())
+    contentType.set(gg.jte.ContentType.Html)
+}
+
 tasks.shadowJar {
     mergeServiceFiles()
     archiveClassifier.set("")
@@ -125,10 +119,24 @@ tasks.shadowJar {
     }
 }
 
-jte {
-    generate()
-    sourceDirectory.set(project.file("src/main/resources/templates").toPath())
-    contentType.set(gg.jte.ContentType.Html)
+tasks.startScripts {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.distTar {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.distZip {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.shadowDistTar {
+    dependsOn(tasks.shadowJar)
+}
+
+tasks.shadowDistZip {
+    dependsOn(tasks.shadowJar)
 }
 
 tasks.register("stage") {
