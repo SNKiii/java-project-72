@@ -21,6 +21,7 @@ sonarqube {
         property("sonar.java.binaries", "build/classes/java/main")
         property("sonar.java.test.binaries", "build/classes/java/test")
         property("sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml")
+        property("sonar.java.checkstyle.reportPaths", "build/reports/checkstyle/main.xml,build/reports/checkstyle/test.xml")
     }
 }
 
@@ -117,6 +118,10 @@ tasks.shadowJar {
     manifest {
         attributes["Main-Class"] = "hexlet.code.App"
     }
+}
+
+tasks.startShadowScripts {
+    dependsOn(tasks.jar)
 }
 
 tasks.startScripts {
