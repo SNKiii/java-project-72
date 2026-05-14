@@ -342,11 +342,11 @@ class AppTest {
     @Test
     void testCheckUrlWithEmptyHtml() {
         String mockHtml = """
-        <html>
-            <head></head>
-            <body></body>
-        </html>
-        """;
+            <html>
+                <head></head>
+                <body></body>
+            </html>
+            """;
         mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
 
         JavalinTest.test(app, (server, client) -> {
