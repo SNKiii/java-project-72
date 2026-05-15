@@ -9,7 +9,7 @@
         <tr>
             <th>ID</th>
             <th>Имя</th>
-            <th>Дата создания</th>
+            <th>Дата последней проверки</th>
             <th>Код ответа</th>
         </tr>
         </thead>
@@ -20,7 +20,13 @@
                 <td>
                     <a href="/urls/${url.getId()}">${url.getName()}</a>
                 </td>
-                <td>${url.getCreatedAt() != null ? url.getCreatedAt().toString() : "-"}</td>
+                <td>
+                    @if(page.getLastCheckDate().containsKey(url.getId()))
+                        ${page.getLastCheckDate().get(url.getId()).toString()}
+                    @else
+                        -
+                    @endif
+                </td>
                 <td>
                     @if(page.getLastCheckCode().containsKey(url.getId()))
                         ${page.getLastCheckCode().get(url.getId())}
